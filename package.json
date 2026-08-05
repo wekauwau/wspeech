@@ -1,0 +1,26 @@
+{
+  "name": "wspeech",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Text-to-Speech-as-a-Service backend",
+  "author": "wekauwau",
+  "license": "ISC",
+  "type": "module",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.3.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @wspeech/api dev",
+    "dev:worker": "pnpm --filter @wspeech/worker dev",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.5",
+    "typescript": "^7.0.2"
+  }
+}
