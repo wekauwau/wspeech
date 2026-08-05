@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Text-to-Speech-as-a-Service backend",
   "author": "wekauwau",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "devEngines": {
     "packageManager": {
