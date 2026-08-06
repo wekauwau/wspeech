@@ -1,1 +1,1 @@
-console.log("worker placeholder");
+console.log('worker placeholder');

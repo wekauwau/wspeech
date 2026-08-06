@@ -1,1 +1,1 @@
-console.log("api placeholder");
+console.log('api placeholder');

@@ -6,21 +6,37 @@
   "author": "wekauwau",
   "license": "MIT",
   "type": "module",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.3.0",
-      "onFail": "download"
-    }
-  },
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev:api": "pnpm --filter @wspeech/api dev",
     "dev:worker": "pnpm --filter @wspeech/worker dev",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.5",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0"
   }
 }
