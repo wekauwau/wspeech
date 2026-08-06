@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "bullmq": "^6.0.8",
+    "ioredis": "^6.0.0",
     "kysely": "^0.28.17",
     "zod": "^4.4.3"
   }

@@ -11,10 +11,13 @@
     "codegen": "kysely-codegen --dialect postgres --out-file ../../packages/shared/src/db.ts --runtime-enums pascal-case"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.2",
     "@fastify/type-provider-zod": "^1.0.0",
     "@wspeech/shared": "workspace:*",
     "bcrypt": "^5.1.1",
+    "bullmq": "^6.0.8",
     "fastify": "^5.11.2",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "kysely": "^0.28.2",
     "pg": "^8.13.1",

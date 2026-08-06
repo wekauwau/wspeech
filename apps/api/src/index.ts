@@ -5,9 +5,12 @@ import {
   validatorCompiler,
   serializerCompiler,
 } from '@fastify/type-provider-zod';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
 import { registerAuth } from './lib/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
+import { ttsRoutes } from './routes/tts.js';
 
 const app = Fastify({
   logger: {
@@ -21,6 +24,14 @@ app.setSerializerCompiler(serializerCompiler);
 await registerAuth(app);
 await app.register(authRoutes);
 await app.register(apiKeyRoutes);
+await app.register(ttsRoutes);
+
+const AUDIO_DIR = process.env.AUDIO_DIR ?? './audio';
+await app.register(fastifyStatic, {
+  root: path.resolve(AUDIO_DIR),
+  prefix: '/audio/',
+  decorateReply: false,
+});
 
 const HealthResponse = z.object({
   status: z.string(),

@@ -3,6 +3,7 @@ dist
 docker
 docs
 node_modules
+audio
 
 .DS_Store
 

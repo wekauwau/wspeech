@@ -10,6 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@wspeech/shared": "workspace:*"
+    "@wspeech/shared": "workspace:*",
+    "bullmq": "^6.0.8",
+    "ioredis": "^6.0.0",
+    "kysely": "^0.29.4",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.3"
   }
 }
