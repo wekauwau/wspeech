@@ -5,6 +5,9 @@ import {
   validatorCompiler,
   serializerCompiler,
 } from '@fastify/type-provider-zod';
+import { registerAuth } from './lib/auth.js';
+import { authRoutes } from './routes/auth.js';
+import { apiKeyRoutes } from './routes/api-keys.js';
 
 const app = Fastify({
   logger: {
@@ -14,6 +17,10 @@ const app = Fastify({
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
+
+await registerAuth(app);
+await app.register(authRoutes);
+await app.register(apiKeyRoutes);
 
 const HealthResponse = z.object({
   status: z.string(),
