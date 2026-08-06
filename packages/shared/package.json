@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "kysely": "^0.28.17",
     "zod": "^4.4.3"
   }
 }

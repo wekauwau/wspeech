@@ -16,6 +16,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "codegen": "pnpm --filter @wspeech/api codegen",
+    "db:push": "atlas schema apply --url \"$DATABASE_URL&search_path=public\" --to file://schema --dev-url 'docker://postgres/17?search_path=public' --auto-approve",
     "prepare": "husky"
   },
   "lint-staged": {

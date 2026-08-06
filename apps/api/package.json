@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "codegen": "kysely-codegen --dialect postgres --out-file ../../packages/shared/src/db.ts --runtime-enums pascal-case"
   },
   "dependencies": {
     "@fastify/type-provider-zod": "^1.0.0",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/pg": "^8.11.11"
+    "@types/pg": "^8.11.11",
+    "kysely-codegen": "^0.20.0"
   }
 }
