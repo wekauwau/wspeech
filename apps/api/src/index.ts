@@ -11,6 +11,7 @@ import { registerAuth } from './lib/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
 import { ttsRoutes } from './routes/tts.js';
+import { usageRoutes } from './routes/usage.js';
 
 const app = Fastify({
   logger: {
@@ -25,6 +26,7 @@ await registerAuth(app);
 await app.register(authRoutes);
 await app.register(apiKeyRoutes);
 await app.register(ttsRoutes);
+await app.register(usageRoutes);
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? './audio';
 await app.register(fastifyStatic, {

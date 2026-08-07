@@ -5,10 +5,9 @@ export type {
   Subscriptions,
   UsageRecords,
   TtsJobs,
-  SubscriptionTier,
   SubscriptionStatus,
 } from './db.js';
-export { TtsJobStatus } from './db.js';
+export { TtsJobStatus, SubscriptionTier } from './db.js';
 
 export {
   SubmitTtsJobBody,
@@ -27,3 +26,6 @@ export type {
 export { TTS_QUEUE, createTtsQueue } from './queue.js';
 export { WyomingClient } from './wyoming.js';
 export type { PiperTtsResult } from './wyoming.js';
+
+export { checkRateLimit, incrUsage, getUsage } from './rate-limit.js';
+export type { RateLimitResult, UsageSnapshot } from './rate-limit.js';

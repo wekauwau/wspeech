@@ -18,6 +18,9 @@
     "format:check": "prettier --check .",
     "codegen": "pnpm --filter @wspeech/api codegen",
     "db:push": "atlas schema apply --url \"$DATABASE_URL&search_path=public\" --to file://schema --dev-url 'docker://postgres/17?search_path=public' --auto-approve",
+    "loadtest": "tsx scripts/loadtest.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -31,8 +34,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/autocannon": "^7.12.7",
     "@types/node": "^26.1.2",
     "@types/pg": "^8.20.3",
+    "autocannon": "^8.0.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -40,6 +45,7 @@
     "prettier": "^3.9.6",
     "tsx": "^4.23.5",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.66.0"
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
   }
 }

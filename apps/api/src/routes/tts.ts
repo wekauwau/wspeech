@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../lib/db.js';
-import { createTtsQueue, WyomingClient, TtsJobStatus } from '@wspeech/shared';
+import { redis } from '../lib/redis.js';
+import {
+  createTtsQueue,
+  WyomingClient,
+  TtsJobStatus,
+  incrUsage,
+} from '@wspeech/shared';
 
 const TTS_QUEUE_INSTANCE = createTtsQueue(process.env.REDIS_URL!);
 const PIPER_HOST = process.env.PIPER_HOST ?? 'localhost';
@@ -70,6 +76,17 @@ export async function ttsRoutes(app: FastifyInstance) {
         },
       );
 
+      // Increment usage counter (characters + requests)
+      const sub = await db
+        .selectFrom('subscriptions')
+        .where('user_id', '=', userId)
+        .select(['current_period_start'])
+        .executeTakeFirst();
+
+      const periodStart =
+        sub?.current_period_start?.toISOString() ?? new Date().toISOString();
+      await incrUsage(redis, userId, periodStart, text.length);
+
       return reply.status(202).send({ job_id: job.id });
     },
   );
@@ -130,9 +147,21 @@ export async function ttsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { text } = request.body;
+      const userId = request.authApiKey!.userId;
 
       const client = new WyomingClient(PIPER_HOST, PIPER_PORT);
       const result = await client.synthesize(text);
+
+      // Increment usage counter
+      const sub = await db
+        .selectFrom('subscriptions')
+        .where('user_id', '=', userId)
+        .select(['current_period_start'])
+        .executeTakeFirst();
+
+      const periodStart =
+        sub?.current_period_start?.toISOString() ?? new Date().toISOString();
+      await incrUsage(redis, userId, periodStart, text.length);
 
       const audioBase64 = result.audio.toString('base64');
 
