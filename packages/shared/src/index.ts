@@ -5,9 +5,8 @@ export type {
   Subscriptions,
   UsageRecords,
   TtsJobs,
-  SubscriptionStatus,
 } from './db.js';
-export { TtsJobStatus, SubscriptionTier } from './db.js';
+export { TtsJobStatus, SubscriptionTier, SubscriptionStatus } from './db.js';
 
 export {
   SubmitTtsJobBody,

@@ -7,11 +7,26 @@ import {
   WyomingClient,
   TtsJobStatus,
   incrUsage,
+  getUsage,
+  SubscriptionTier,
 } from '@wspeech/shared';
 
 const TTS_QUEUE_INSTANCE = createTtsQueue(process.env.REDIS_URL!);
 const PIPER_HOST = process.env.PIPER_HOST ?? 'localhost';
 const PIPER_PORT = Number(process.env.PIPER_PORT ?? 10200);
+
+// Tier quotas (characters per month)
+const TIER_QUOTAS: Record<string, number> = {
+  free: 10_000,
+  starter: 100_000,
+  pro: 1_000_000,
+  enterprise: 10_000_000,
+};
+
+function getQuota(tier: string): number {
+  const q = TIER_QUOTAS[tier];
+  return q !== undefined ? q : 10_000;
+}
 
 const SubmitTtsBody = z.object({
   text: z.string().min(1).max(10000),
@@ -51,6 +66,28 @@ export async function ttsRoutes(app: FastifyInstance) {
       const userId = request.authApiKey!.userId;
       const apiKeyId = request.authApiKey!.id;
 
+      // Check tier quota before allowing job
+      const sub = await db
+        .selectFrom('subscriptions')
+        .where('user_id', '=', userId)
+        .select(['tier', 'current_period_start'])
+        .executeTakeFirst();
+
+      const tier = sub?.tier ?? SubscriptionTier.Free;
+      const periodStart =
+        sub?.current_period_start?.toISOString() ?? new Date().toISOString();
+      const quota = getQuota(tier);
+
+      const usage = await getUsage(redis, userId, periodStart);
+      if (usage.characters + text.length > quota) {
+        return reply.status(402).send({
+          error: 'Usage quota exceeded',
+          tier,
+          characters_used: usage.characters,
+          characters_limit: quota,
+        });
+      }
+
       const job = await db
         .insertInto('tts_jobs')
         .values({
@@ -77,14 +114,6 @@ export async function ttsRoutes(app: FastifyInstance) {
       );
 
       // Increment usage counter (characters + requests)
-      const sub = await db
-        .selectFrom('subscriptions')
-        .where('user_id', '=', userId)
-        .select(['current_period_start'])
-        .executeTakeFirst();
-
-      const periodStart =
-        sub?.current_period_start?.toISOString() ?? new Date().toISOString();
       await incrUsage(redis, userId, periodStart, text.length);
 
       return reply.status(202).send({ job_id: job.id });
@@ -149,18 +178,40 @@ export async function ttsRoutes(app: FastifyInstance) {
       const { text } = request.body;
       const userId = request.authApiKey!.userId;
 
-      const client = new WyomingClient(PIPER_HOST, PIPER_PORT);
-      const result = await client.synthesize(text);
-
-      // Increment usage counter
+      // Check tier quota before allowing sync
       const sub = await db
         .selectFrom('subscriptions')
         .where('user_id', '=', userId)
-        .select(['current_period_start'])
+        .select(['tier', 'current_period_start'])
         .executeTakeFirst();
 
+      const tier = sub?.tier ?? SubscriptionTier.Free;
       const periodStart =
         sub?.current_period_start?.toISOString() ?? new Date().toISOString();
+      const quota = getQuota(tier);
+
+      const usage = await getUsage(redis, userId, periodStart);
+      if (usage.characters + text.length > quota) {
+        return reply.status(402).send({
+          error: 'Usage quota exceeded',
+          tier,
+          characters_used: usage.characters,
+          characters_limit: quota,
+        });
+      }
+
+      const client = new WyomingClient(PIPER_HOST, PIPER_PORT);
+
+      let result;
+      try {
+        result = await client.synthesize(text);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'TTS synthesis failed';
+        return reply.status(502).send({ error: message });
+      }
+
+      // Increment usage counter
       await incrUsage(redis, userId, periodStart, text.length);
 
       const audioBase64 = result.audio.toString('base64');

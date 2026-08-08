@@ -19,6 +19,8 @@
     "codegen": "pnpm --filter @wspeech/api codegen",
     "db:push": "./scripts/db.sh push",
     "db:reset": "./scripts/db.sh reset",
+    "db:flush": "./scripts/db.sh flush",
+    "db:full": "./scripts/db.sh full",
     "db:status": "./scripts/db.sh status",
     "db:shell": "./scripts/db.sh shell",
     "loadtest": "tsx scripts/loadtest.ts",

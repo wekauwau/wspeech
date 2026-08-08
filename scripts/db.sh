@@ -22,6 +22,18 @@ psql_cmd() {
   PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" "$@"
 }
 
+REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_PASS="${REDIS_PASSWORD:-wspeech}"
+
+redis_cmd() {
+  if command -v redis-cli &>/dev/null; then
+    redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASS" "$@"
+  else
+    docker compose -f "$PROJECT_ROOT/compose.yaml" exec -T redis redis-cli -a "$REDIS_PASS" "$@"
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: db.sh <command>
@@ -29,6 +41,8 @@ Usage: db.sh <command>
 Commands:
   push      Apply schema migrations via Atlas
   reset     Drop and recreate schema, then push
+  flush     Flush Redis (clears BullMQ jobs + rate limits + usage counters)
+  full      Reset DB + flush Redis
   status    Show current migration status
   shell     Open psql shell
 EOF
@@ -51,6 +65,18 @@ cmd_reset() {
   cmd_push
 }
 
+cmd_flush() {
+  echo "Flushing Redis..."
+  redis_cmd FLUSHDB
+  echo "Done."
+}
+
+cmd_full() {
+  cmd_reset
+  cmd_flush
+  echo "Full reset complete (DB + Redis)."
+}
+
 cmd_status() {
   echo "Migration status:"
   cd "$PROJECT_ROOT"
@@ -67,6 +93,8 @@ cmd_shell() {
 case "${1:-}" in
   push)   cmd_push ;;
   reset)  cmd_reset ;;
+  flush)  cmd_flush ;;
+  full)   cmd_full ;;
   status) cmd_status ;;
   shell)  cmd_shell ;;
   *)      usage ;;

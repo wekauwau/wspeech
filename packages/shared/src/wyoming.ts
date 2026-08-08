@@ -1,15 +1,47 @@
 import net from 'node:net';
-import crypto from 'node:crypto';
-
-interface WyomingEvent {
-  type: string;
-  data?: Record<string, unknown>;
-  payload?: Buffer;
-}
 
 export interface PiperTtsResult {
   audio: Buffer;
   sampleRate: number;
+}
+
+function createWavHeader(
+  pcmLength: number,
+  sampleRate: number,
+  numChannels = 1,
+  bitsPerSample = 16,
+): Buffer {
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const header = Buffer.alloc(44);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmLength, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcmLength, 40);
+
+  return header;
+}
+
+function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
+  return Buffer.concat([createWavHeader(pcm.length, sampleRate), pcm]);
+}
+
+interface ParserState {
+  mode: 'line' | 'data' | 'payload';
+  lineBuffer: string;
+  event: Record<string, unknown> | null;
+  remainingBytes: number;
+  dataAccumulator: Buffer;
 }
 
 export class WyomingClient {
@@ -26,60 +58,152 @@ export class WyomingClient {
       const socket = new net.Socket();
       let audioBuffer = Buffer.alloc(0);
       let sampleRate = 22050;
-      let buffer = Buffer.alloc(0);
 
       const timeout = setTimeout(() => {
         socket.destroy();
         reject(new Error('Piper TTS timeout'));
       }, 60_000);
 
-      socket.connect(this.port, this.host, () => {
-        // Send describe
-        this.sendEvent(socket, { type: 'describe' });
-      });
+      const state: ParserState = {
+        mode: 'line',
+        lineBuffer: '',
+        event: null,
+        remainingBytes: 0,
+        dataAccumulator: Buffer.alloc(0),
+      };
 
-      socket.on('data', (chunk: Buffer) => {
-        buffer = Buffer.concat([buffer, chunk]);
+      const processEvent = (event: Record<string, unknown>) => {
+        const type = event.type as string;
 
-        while (buffer.length >= 4) {
-          const eventLength = buffer.readUInt32BE(0);
-          if (buffer.length < 4 + eventLength) break;
+        if (type === 'info') {
+          const dataBytes = Buffer.from(JSON.stringify({ text }), 'utf-8');
+          socket.write(
+            JSON.stringify({
+              type: 'synthesize',
+              data_length: dataBytes.length,
+              version: 1,
+            }) + '\n',
+          );
+          socket.write(dataBytes);
+        } else if (type === 'audio-start') {
+          audioBuffer = Buffer.alloc(0);
+          const data = event.data as Record<string, unknown> | undefined;
+          sampleRate = (data?.sample_rate as number) ?? 22050;
+        } else if (type === 'audio-chunk' && event.payload) {
+          audioBuffer = Buffer.concat([audioBuffer, event.payload as Buffer]);
+        } else if (type === 'audio-stop') {
+          clearTimeout(timeout);
+          socket.destroy();
+          resolve({ audio: pcmToWav(audioBuffer, sampleRate), sampleRate });
+        } else if (type === 'error') {
+          clearTimeout(timeout);
+          socket.destroy();
+          const data = event.data as Record<string, unknown> | undefined;
+          reject(new Error((data?.message as string) ?? 'Piper error'));
+        }
+      };
 
-          const eventJson = buffer
-            .subarray(4, 4 + eventLength)
-            .toString('utf-8');
-          buffer = buffer.subarray(4 + eventLength);
+      const parseChunk = (buf: Buffer): Buffer<ArrayBufferLike> => {
+        while (buf.length > 0) {
+          if (state.mode === 'line') {
+            const nlIdx = buf.indexOf(0x0a); // '\n'
+            if (nlIdx === -1) {
+              state.lineBuffer += buf.toString('utf-8');
+              return Buffer.alloc(0);
+            }
+            state.lineBuffer += buf.subarray(0, nlIdx).toString('utf-8');
+            buf = buf.subarray(nlIdx + 1);
 
-          const event: WyomingEvent = JSON.parse(eventJson);
+            if (state.lineBuffer.trim()) {
+              const event = JSON.parse(state.lineBuffer);
+              state.event = event;
+              state.lineBuffer = '';
 
-          if (event.type === 'describe') {
-            // After describe, send text-to-speak
-            this.sendEvent(socket, {
-              type: 'text-to-speak',
-              data: { text },
-            });
-          } else if (event.type === 'audio-start') {
-            audioBuffer = Buffer.alloc(0);
-            sampleRate =
-              (event.data as { sample_rate?: number })?.sample_rate ?? 22050;
-          } else if (event.type === 'audio-chunk' && event.payload) {
-            audioBuffer = Buffer.concat([audioBuffer, event.payload]);
-          } else if (event.type === 'audio-stop') {
-            clearTimeout(timeout);
-            socket.destroy();
-            resolve({ audio: audioBuffer, sampleRate });
-            return;
-          } else if (event.type === 'error') {
-            clearTimeout(timeout);
-            socket.destroy();
-            reject(
-              new Error(
-                (event.data as { message?: string })?.message ?? 'Piper error',
-              ),
-            );
-            return;
+              const dataLen = (event.data_length as number) ?? 0;
+              const payloadLen = (event.payload_length as number) ?? 0;
+
+              if (dataLen > 0) {
+                state.remainingBytes = dataLen;
+                state.mode = 'data';
+              } else if (payloadLen > 0) {
+                state.remainingBytes = payloadLen;
+                state.mode = 'payload';
+              } else {
+                processEvent(event);
+                state.event = null;
+              }
+            } else {
+              state.lineBuffer = '';
+            }
+          } else if (state.mode === 'data') {
+            const needed = state.remainingBytes;
+            const take = Math.min(needed, buf.length);
+
+            state.dataAccumulator = Buffer.concat([
+              state.dataAccumulator,
+              buf.subarray(0, take),
+            ]);
+
+            buf = buf.subarray(take);
+            state.remainingBytes -= take;
+
+            if (state.remainingBytes <= 0) {
+              const event = state.event!;
+              const parsed = JSON.parse(
+                state.dataAccumulator.toString('utf-8'),
+              );
+              if (event.data) {
+                Object.assign(event.data, parsed);
+              } else {
+                event.data = parsed;
+              }
+              state.dataAccumulator = Buffer.alloc(0);
+
+              const payloadLen = (event.payload_length as number) ?? 0;
+              if (payloadLen > 0) {
+                state.remainingBytes = payloadLen;
+                state.mode = 'payload';
+              } else {
+                processEvent(event);
+                state.event = null;
+                state.mode = 'line';
+              }
+            }
+          } else if (state.mode === 'payload') {
+            const needed = state.remainingBytes;
+            const take = Math.min(needed, buf.length);
+
+            state.dataAccumulator = Buffer.concat([
+              state.dataAccumulator,
+              buf.subarray(0, take),
+            ]);
+
+            buf = buf.subarray(take);
+            state.remainingBytes -= take;
+
+            if (state.remainingBytes <= 0) {
+              const event = state.event!;
+              event.payload = state.dataAccumulator;
+              state.dataAccumulator = Buffer.alloc(0);
+
+              processEvent(event);
+              state.event = null;
+              state.mode = 'line';
+            }
           }
         }
+        return buf;
+      };
+
+      socket.connect(this.port, this.host, () => {
+        socket.write(JSON.stringify({ type: 'describe', version: 1 }) + '\n');
+      });
+
+      let remaining: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+
+      socket.on('data', (chunk: Buffer) => {
+        remaining = Buffer.concat([remaining, chunk]);
+        remaining = parseChunk(remaining);
       });
 
       socket.on('error', (err) => {
@@ -90,22 +214,11 @@ export class WyomingClient {
       socket.on('close', () => {
         clearTimeout(timeout);
         if (audioBuffer.length > 0) {
-          resolve({ audio: audioBuffer, sampleRate });
+          resolve({ audio: pcmToWav(audioBuffer, sampleRate), sampleRate });
         } else {
           reject(new Error('Connection closed without audio'));
         }
       });
     });
-  }
-
-  private sendEvent(socket: net.Socket, event: WyomingEvent) {
-    const json = JSON.stringify({
-      ...event,
-      id: crypto.randomUUID(),
-    });
-    const jsonBuffer = Buffer.from(json, 'utf-8');
-    const lengthBuffer = Buffer.alloc(4);
-    lengthBuffer.writeUInt32BE(jsonBuffer.length, 0);
-    socket.write(Buffer.concat([lengthBuffer, jsonBuffer]));
   }
 }
