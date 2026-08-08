@@ -1,0 +1,74 @@
+# Cloud Run service configuration for API
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: tts-api
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: <PROJECT_ID>:<REGION>:<INSTANCE_NAME>
+        run.googleapis.com/vpc-access-connector: <CONNECTOR_NAME>
+        run.googleapis.com/vpc-access-egress: PRIVATE_RANGES_ONLY
+    spec:
+      serviceAccountName: tts-api-sa@<PROJECT_ID>.iam.gserviceaccount.com
+      containers:
+        - image: gcr.io/<PROJECT_ID>/tts-api
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: redis-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: jwt-secret
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: stripe-secret-key
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: stripe-webhook-secret
+            - name: AUDIO_BUCKET
+              value: <PROJECT_ID>-tts-audio
+            - name: PIPER_HOST
+              value: localhost
+            - name: PIPER_PORT
+              value: '10200'
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: '1'
+            requests:
+              memory: 256Mi
+              cpu: 0.5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 30
+  traffic:
+    - latestRevision: true
+      percent: 100

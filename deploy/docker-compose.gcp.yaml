@@ -1,3 +1,6 @@
+# Docker Compose for local development with GCP services
+# Uses Cloud SQL Auth Proxy to connect to Cloud SQL
+
 services:
   postgres:
     image: postgres:17-alpine

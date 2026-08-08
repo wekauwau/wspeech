@@ -13,6 +13,5 @@ audio
 .git
 .gitignore
 compose.yaml
-tsconfig.json
 
 *.log

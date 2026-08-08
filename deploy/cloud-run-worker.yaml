@@ -1,0 +1,45 @@
+# Cloud Run service configuration for Worker
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: tts-worker
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: <PROJECT_ID>:<REGION>:<INSTANCE_NAME>
+        run.googleapis.com/vpc-access-connector: <CONNECTOR_NAME>
+        run.googleapis.com/vpc-access-egress: PRIVATE_RANGES_ONLY
+    spec:
+      serviceAccountName: tts-worker-sa@<PROJECT_ID>.iam.gserviceaccount.com
+      containers:
+        - image: gcr.io/<PROJECT_ID>/tts-worker
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tts-secrets
+                  key: redis-url
+            - name: AUDIO_BUCKET
+              value: <PROJECT_ID>-tts-audio
+            - name: PIPER_HOST
+              value: localhost
+            - name: PIPER_PORT
+              value: '10200'
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: '2'
+            requests:
+              memory: 512Mi
+              cpu: 1
+  traffic:
+    - latestRevision: true
+      percent: 100
